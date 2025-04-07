@@ -112,3 +112,21 @@ func (actor *RabbitMQActor) unsafePush(data []byte) error {
 	)
 }
 
+func handleError(err error, msg string) {
+	if err != nil {
+		log.Fatalf("%s: %s", msg, err)
+	}
+}
+
+//A new AMQP connection.
+func (actor *RabbitMQActor) connect(addr string) (*amqp.Connection, error) {
+	conn, err := amqp.Dial(addr)
+	if err != nil {
+		handleError(err, "Dialing failed to RabbitMQ broker")
+		return nil, err
+	}
+	actor.changeConnection(conn)  //TODO
+	actor.isReady = true
+	actor.logger.Println("Connected to RabbitMQ!")
+	return conn, nil
+}
