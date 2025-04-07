@@ -218,3 +218,14 @@ func (actor *RabbitMQActor) init(conn *amqp.Connection) error {
 	actor.logger.Println("Channel initialized and queue declared.")
 	return nil
 }
+
+// changeChannel takes a new channel and updates the channel listeners.
+func (actor *RabbitMQActor) changeChannel(channel *amqp.Channel) {
+	actor.channel = channel
+	actor.notifyChanClose = make(chan *amqp.Error, 1)
+	// a.notifyConfirm = make(chan amqp.Confirmation, 1) // We'll handle confirms in Push
+	actor.channel.NotifyClose(actor.notifyChanClose)
+	// a.channel.NotifyPublish(a.notifyConfirm)
+}
+
+
