@@ -1,11 +1,14 @@
 package actor
 
 import (
+	"context"
+	"errors"
 	model "github.com/cristiandpt/measures-producer/internal/model"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"log"
 	"os"
 	"sync"
+	"time"
 )
 
 type RabbitMQActor struct {
@@ -68,7 +71,7 @@ func (actor *RabbitMQActor) handlePush(data []byte) {
 	}
 
 	for {
-		err  := actor.unsafePush(data)
+		err := actor.unsafePush(data)
 		if err == nil {
 			// Confirmation handling (simplified for actor model example)
 			// In a more complex scenario, you might want to track confirmations per message.
@@ -111,10 +114,10 @@ func (actor *RabbitMQActor) unsafePush(data []byte) error {
 
 	return actor.channel.PublishWithContext(
 		ctx,
-		"",             // exchange
-		actor.queueName,    // routing key
-		false,          // mandatory
-		false,          // immediate
+		"",              // exchange
+		actor.queueName, // routing key
+		false,           // mandatory
+		false,           // immediate
 		amqp.Publishing{
 			ContentType: "text/plain",
 			Body:        data,
@@ -128,19 +131,18 @@ func handleError(err error, msg string) {
 	}
 }
 
-//A new AMQP connection.
+// A new AMQP connection.
 func (actor *RabbitMQActor) connect(addr string) (*amqp.Connection, error) {
 	conn, err := amqp.Dial(addr)
 	if err != nil {
 		handleError(err, "Dialing failed to RabbitMQ broker")
 		return nil, err
 	}
-	actor.changeConnection(conn) 
+	actor.changeConnection(conn)
 	actor.isReady = true
 	actor.logger.Println("Connected to RabbitMQ!")
 	return conn, nil
 }
-
 
 // changeConnection takes a new connection and updates the close listener.
 func (actor *RabbitMQActor) changeConnection(connection *amqp.Connection) {
@@ -148,7 +150,6 @@ func (actor *RabbitMQActor) changeConnection(connection *amqp.Connection) {
 	actor.notifyConnClose = make(chan *amqp.Error, 1)
 	actor.conn.NotifyClose(a.notifyConnClose)
 }
-
 
 // handleReconnect will wait for a connection error and continuously attempt to reconnect.
 func (actor *RabbitMQActor) handleReconnect() {
@@ -214,11 +215,11 @@ func (actor *RabbitMQActor) init(conn *amqp.Connection) error {
 
 	_, err = ch.QueueDeclare(
 		actor.queueName, // name
-		false,       // durable
-		false,       // delete when unused
-		false,       // exclusive
-		false,       // no-wait
-		nil,         // arguments
+		false,           // durable
+		false,           // delete when unused
+		false,           // exclusive
+		false,           // no-wait
+		nil,             // arguments
 	)
 	if err != nil {
 		return err
@@ -239,27 +240,11 @@ func (actor *RabbitMQActor) changeChannel(channel *amqp.Channel) {
 }
 
 func (actor *RabbitMQActor) Push(data []byte) {
-	actor.mailbox <- PushMessage{Data: data}
+	actor.mailbox <- model.PushMessage{Data: data}
 }
 
 func (actor *RabbitMQActor) Close() {
-	actor.mailbox <- CloseMessage{}
+	actor.mailbox <- model.CloseMessage{}
 	actor.wg.Wait() // Wait for the actor to finish
 	actor.logger.Println("Actor stopped.")
-}
-
-func (actor *RabbitMQActor) handleClose() {
-	actor.logger.Println("Closing connection...")
-	if actor.channel != nil {
-		if err := actor.channel.Close(); err != nil {
-			actor.logger.Printf("Error closing channel: %s\n", err)
-		}
-	}
-	if actor.conn != nil {
-		if err := actor.conn.Close(); err != nil {
-			actor.logger.Printf("Error closing connection: %s\n", err)
-		}
-	}
-	actor.isReady = false
-	close(actor.mailbox) // Close the mailbox to signal the run loop to exit
 }
