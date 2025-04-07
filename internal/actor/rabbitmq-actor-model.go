@@ -1,10 +1,11 @@
 package actor
 
-import(
-	"github.com/streadway/amqp"
+import (
+	model "github.com/cristiandpt/measures-producer/internal/model"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"log"
-	"sync"
 	"os"
+	"sync"
 )
 
 type RabbitMQActor struct {
@@ -37,6 +38,54 @@ func (actor *RabbitMQActor) run() {
 	// TODO
 
 	for msg := range actor.mailbox {
-		// TODO
+		switch m := msg.(type) {
+		case model.PushMessage:
+			actor.handlePush(m.Data)
+		case model.CloseMessage:
+			actor.handleClose()
+			return
+		default:
+			actor.logger.Printf("Received unknown message type: %T\n", msg)
+		}
 	}
+}
+
+// handlePush attempts to push data to the queue with retry.
+func (actor *RabbitMQActor) handlePush(data []byte) {
+	if !actor.isReady {
+		actor.logger.Println("Not connected, cannot push message.")
+		return
+	}
+
+	for {
+		err  := actor.unsafePush(data)
+		if err == nil {
+			// Confirmation handling (simplified for actor model example)
+			// In a more complex scenario, you might want to track confirmations per message.
+			actor.logger.Printf("Message pushed successfully: %s\n", string(data))
+			return
+		}
+		actor.logger.Printf("Push failed: %s. Retrying in %s...\n", err, resendDelay)
+		select {
+		case <-time.After(resendDelay):
+		case <-actor.mailbox: // Allow exiting if the actor is closed during retry
+			return
+		}
+	}
+}
+
+func (actor *RabbitMQActor) handleClose() {
+	actor.logger.Println("Closing connection...")
+	if actor.channel != nil {
+		if err := actor.channel.Close(); err != nil {
+			actor.logger.Printf("Error closing channel: %s\n", err)
+		}
+	}
+	if actor.conn != nil {
+		if err := actor.conn.Close(); err != nil {
+			actor.logger.Printf("Error closing connection: %s\n", err)
+		}
+	}
+	actor.isReady = false
+	close(actor.mailbox) // Close the mailbox to signal the run loop to exit
 }
