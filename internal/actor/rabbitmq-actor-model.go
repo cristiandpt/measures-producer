@@ -162,3 +162,59 @@ func (actor *RabbitMQActor) handleReconnect() {
 		}
 	}
 }
+
+// handleReInit will wait for a channel error and continuously attempt to re-initialize the channel.
+func (actor *RabbitMQActor) handleReInit(conn *amqp.Connection) bool {
+	for {
+		if err := actor.init(conn); err != nil {
+			actor.logger.Printf("Failed to initialize channel: %s. Retrying in %s...\n", err, reInitDelay)
+			select {
+			case <-time.After(reInitDelay):
+			case <-actor.notifyConnClose:
+				actor.logger.Println("Connection closed. Reconnecting...")
+				return false
+			case <-actor.mailbox: // Allow exiting if the actor is closed during re-init
+				return true
+			}
+			continue
+		}
+
+		select {
+		case <-actor.mailbox: // Allow exiting if the actor is closed
+			return true
+		case <-actor.notifyConnClose:
+			actor.logger.Println("Connection closed. Reconnecting...")
+			return false
+		case <-actor.notifyChanClose:
+			actor.logger.Println("Channel closed. Re-initializing...")
+		}
+	}
+}
+
+// init will initialize the channel and declare the queue.
+func (actor *RabbitMQActor) init(conn *amqp.Connection) error {
+	ch, err := conn.Channel()
+	if err != nil {
+		return err
+	}
+
+	if err := ch.Confirm(false); err != nil {
+		return err
+	}
+
+	_, err = ch.QueueDeclare(
+		actor.queueName, // name
+		false,       // durable
+		false,       // delete when unused
+		false,       // exclusive
+		false,       // no-wait
+		nil,         // arguments
+	)
+	if err != nil {
+		return err
+	}
+
+	actor.changeChannel(ch)
+	actor.logger.Println("Channel initialized and queue declared.")
+	return nil
+}
