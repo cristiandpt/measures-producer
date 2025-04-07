@@ -130,3 +130,11 @@ func (actor *RabbitMQActor) connect(addr string) (*amqp.Connection, error) {
 	actor.logger.Println("Connected to RabbitMQ!")
 	return conn, nil
 }
+
+
+// changeConnection takes a new connection and updates the close listener.
+func (actor *RabbitMQActor) changeConnection(connection *amqp.Connection) {
+	actor.conn = connection
+	actor.notifyConnClose = make(chan *amqp.Error, 1)
+	actor.conn.NotifyClose(a.notifyConnClose)
+}
