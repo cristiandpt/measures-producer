@@ -31,3 +31,12 @@ func NewRabbitMQActor(queueName, addr string) *RabbitMQActor {
 	go actor.run() // Start the actor's processing loop
 	return actor
 }
+
+func (actor *RabbitMQActor) run() {
+	defer actor.wg.Done()
+	// TODO
+
+	for msg := range actor.mailbox {
+		// TODO
+	}
+}
