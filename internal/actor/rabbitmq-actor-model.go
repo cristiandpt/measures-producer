@@ -248,3 +248,18 @@ func (actor *RabbitMQActor) Close() {
 	actor.logger.Println("Actor stopped.")
 }
 
+func (actor *RabbitMQActor) handleClose() {
+	actor.logger.Println("Closing connection...")
+	if actor.channel != nil {
+		if err := actor.channel.Close(); err != nil {
+			actor.logger.Printf("Error closing channel: %s\n", err)
+		}
+	}
+	if actor.conn != nil {
+		if err := actor.conn.Close(); err != nil {
+			actor.logger.Printf("Error closing connection: %s\n", err)
+		}
+	}
+	actor.isReady = false
+	close(actor.mailbox) // Close the mailbox to signal the run loop to exit
+}
