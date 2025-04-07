@@ -89,3 +89,26 @@ func (actor *RabbitMQActor) handleClose() {
 	actor.isReady = false
 	close(actor.mailbox) // Close the mailbox to signal the run loop to exit
 }
+
+// unsafePush publishes the message to the queue without waiting for confirmation.
+func (actor *RabbitMQActor) unsafePush(data []byte) error {
+	if !actor.isReady || actor.channel == nil {
+		return errNotConnected
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	return actor.channel.PublishWithContext(
+		ctx,
+		"",             // exchange
+		actor.queueName,    // routing key
+		false,          // mandatory
+		false,          // immediate
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        data,
+		},
+	)
+}
+
