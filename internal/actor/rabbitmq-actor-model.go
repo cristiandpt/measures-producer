@@ -35,7 +35,7 @@ func NewRabbitMQActor(queueName, addr string) *RabbitMQActor {
 
 func (actor *RabbitMQActor) run() {
 	defer actor.wg.Done()
-	// TODO
+	actor.handleReconnect()
 
 	for msg := range actor.mailbox {
 		switch m := msg.(type) {
@@ -125,7 +125,7 @@ func (actor *RabbitMQActor) connect(addr string) (*amqp.Connection, error) {
 		handleError(err, "Dialing failed to RabbitMQ broker")
 		return nil, err
 	}
-	actor.changeConnection(conn)  //TODO
+	actor.changeConnection(conn) 
 	actor.isReady = true
 	actor.logger.Println("Connected to RabbitMQ!")
 	return conn, nil
@@ -137,4 +137,28 @@ func (actor *RabbitMQActor) changeConnection(connection *amqp.Connection) {
 	actor.conn = connection
 	actor.notifyConnClose = make(chan *amqp.Error, 1)
 	actor.conn.NotifyClose(a.notifyConnClose)
+}
+
+
+// handleReconnect will wait for a connection error and continuously attempt to reconnect.
+func (actor *RabbitMQActor) handleReconnect() {
+	for {
+		actor.isReady = false
+		actor.logger.Println("Attempting to connect...")
+
+		conn, err := actor.connect(actor.addr)
+		if err != nil {
+			actor.logger.Printf("Failed to connect: %s. Retrying in %s...\n", err, reconnectDelay)
+			select {
+			case <-time.After(reconnectDelay):
+			case <-actor.mailbox: // Allow exiting if the actor is closed during reconnect
+				return
+			}
+			continue
+		}
+
+		if actor.handleReInit(conn) {
+			return // Exit if re-initialization was part of a shutdown
+		}
+	}
 }
