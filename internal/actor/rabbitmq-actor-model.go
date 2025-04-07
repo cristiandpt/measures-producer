@@ -21,6 +21,16 @@ type RabbitMQActor struct {
 	logger          *log.Logger
 }
 
+const (
+	reconnectDelay = 5 * time.Second
+	reInitDelay    = 2 * time.Second
+	resendDelay    = 5 * time.Second
+)
+
+var (
+	errNotConnected = errors.New("not connected to a server")
+)
+
 func NewRabbitMQActor(queueName, addr string) *RabbitMQActor {
 	actor := &RabbitMQActor{
 		queueName: queueName,
@@ -228,4 +238,13 @@ func (actor *RabbitMQActor) changeChannel(channel *amqp.Channel) {
 	// a.channel.NotifyPublish(a.notifyConfirm)
 }
 
+func (actor *RabbitMQActor) Push(data []byte) {
+	actor.mailbox <- PushMessage{Data: data}
+}
+
+func (actor *RabbitMQActor) Close() {
+	actor.mailbox <- CloseMessage{}
+	actor.wg.Wait() // Wait for the actor to finish
+	actor.logger.Println("Actor stopped.")
+}
 
