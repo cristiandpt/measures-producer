@@ -5,12 +5,13 @@ import (
 	"fmt"
 	actor "github.com/cristiandpt/measures-producer/internal/actor"
 	"log"
+	"os"
 	"time"
 )
 
 func main() {
 	queueMeasures := "measures_queue"
-	addr := "amqp://guest:guest@localhost:5672/"
+	addr := os.Getenv("RABBITMQ_ADDR") //"amqp://guest:guest@localhost:5672/"
 	rabbitActor := actor.NewRabbitMQActor(queueMeasures, addr)
 	defer rabbitActor.Close()
 

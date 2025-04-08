@@ -14,7 +14,7 @@ RUN go mod download -x
 COPY . .
 
 # Build the Go application
-RUN go build -o go-rabbitmq-client .
+RUN go build -o go-rabbitmq-client ./cmd/producer/main.go
 
 # Stage 2: Final Image (lightweight runtime image)
 FROM alpine:latest

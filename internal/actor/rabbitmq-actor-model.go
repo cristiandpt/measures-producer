@@ -148,7 +148,7 @@ func (actor *RabbitMQActor) connect(addr string) (*amqp.Connection, error) {
 func (actor *RabbitMQActor) changeConnection(connection *amqp.Connection) {
 	actor.conn = connection
 	actor.notifyConnClose = make(chan *amqp.Error, 1)
-	actor.conn.NotifyClose(a.notifyConnClose)
+	actor.conn.NotifyClose(actor.notifyConnClose)
 }
 
 // handleReconnect will wait for a connection error and continuously attempt to reconnect.
